@@ -20,7 +20,7 @@ func CreateGenesisPeer(listenIp string, listenPort int) peer {
 	}
 }
 
-func CreatePeerAndConnect(ip string, port int) peer {
+func CreatePeerAndConnect(ip string, port int, listenIp string, listenPort int) peer {
 	conn, err := net.Dial("udp", ip+":"+strconv.Itoa(port))
 	if err != nil {
 		log.Fatal("cant connect")
@@ -44,6 +44,15 @@ func listen(listenIp string, listenPort int) {
 	}
 	defer conn.Close()
 	readFromConnection(conn)
+}
+
+func readWriter(conn net.UDPConn, respond func([]byte) []byte) {
+	buf := make([]byte, 256)
+	_, addr, err := conn.ReadFromUDP(buf)
+	if err != nil {
+		log.Fatal()
+	}
+	conn.WriteToUDP(respond(buf), addr)
 }
 
 func readFromConnection(conn *net.UDPConn) {
