@@ -1,6 +1,9 @@
 package main
 
-import "p2p/peer"
+import (
+	"p2p/peer"
+	"time"
+)
 
 func main() {
 	// port := 10000
@@ -14,8 +17,9 @@ func main() {
 	// 	)
 	// }
 
-	peer.CreateGenesisPeer("localhost", 10000)
-	peer.CreatePeerAndConnect("localhost", 10000, "localhost", 10001)
+	peer.CreateGenesisPeer(10000)
+	time.Sleep(100 * time.Millisecond)
+	peer.CreatePeerAndConnect(10001, "localhost", 10000)
 
 	select {}
 }

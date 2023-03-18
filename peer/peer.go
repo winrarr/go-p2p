@@ -11,8 +11,8 @@ type Peer struct {
 	knownPeers []*net.UDPAddr
 }
 
-func CreateGenesisPeer(lIp string, lPort int) Peer {
-	conn := newConnection(lIp, lPort)
+func CreateGenesisPeer(lPort int) Peer {
+	conn := newConnection(lPort)
 	go listen(conn)
 
 	return Peer{
@@ -20,8 +20,8 @@ func CreateGenesisPeer(lIp string, lPort int) Peer {
 	}
 }
 
-func CreatePeerAndConnect(rIp string, rPort int, lIp string, lPort int) Peer {
-	conn := newConnection(lIp, lPort)
+func CreatePeerAndConnect(lPort int, rIp string, rPort int) Peer {
+	conn := newConnection(lPort)
 	go listen(conn)
 
 	rAddr := &net.UDPAddr{
@@ -38,9 +38,8 @@ func CreatePeerAndConnect(rIp string, rPort int, lIp string, lPort int) Peer {
 	return p
 }
 
-func newConnection(lIp string, lPort int) *net.UDPConn {
+func newConnection(lPort int) *net.UDPConn {
 	lAddr := &net.UDPAddr{
-		IP:   net.ParseIP(lIp),
 		Port: lPort,
 	}
 	conn, err := net.ListenUDP("udp", lAddr)
