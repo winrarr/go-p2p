@@ -3,11 +3,18 @@ package main
 import "p2p/peer"
 
 func main() {
-	port := 1234
-	_ = peer.CreateGenesisPeer("localhost", port)
-	p1 := peer.CreatePeerAndConnect("localhost", port)
+	port := 10000
+	peers := []peer.Peer{peer.CreateGenesisPeer("localhost", port)}
+	for i := 0; i < 1; i++ {
+		peers = append(peers,
+			peer.CreatePeerAndConnect(
+				"localhost", port,
+				"localholst", port+i,
+			),
+		)
+	}
 
-	p1.SendTooAll("sendConnections tsraiotn sratiort ")
+	peers[1].SendTooAll("sendConnections ")
 
 	select {}
 }

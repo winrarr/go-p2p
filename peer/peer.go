@@ -4,36 +4,30 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"p2p/rpc"
 	"strconv"
-	"strings"
 )
 
-type peer struct {
+type Peer struct {
 	conns []net.Conn
 }
 
-func CreateGenesisPeer(listenIp string, listenPort int) peer {
+func CreateGenesisPeer(listenIp string, listenPort int) Peer {
 	go listen(listenIp, listenPort)
 
-	return peer{
+	return Peer{
 		conns: []net.Conn{},
 	}
 }
 
-func CreatePeerAndConnect(ip string, port int, listenIp string, listenPort int) peer {
+func CreatePeerAndConnect(ip string, port int, listenIp string, listenPort int) Peer {
 	conn, err := net.Dial("udp", ip+":"+strconv.Itoa(port))
 	if err != nil {
 		log.Fatal("cant connect")
 	}
 
-	return peer{
+	return Peer{
 		conns: []net.Conn{conn},
-	}
-}
-
-func (p *peer) SendTooAll(message string) {
-	for _, conn := range p.conns {
-		fmt.Fprintln(conn, message)
 	}
 }
 
@@ -43,32 +37,15 @@ func listen(listenIp string, listenPort int) {
 		log.Fatal(err)
 	}
 	defer conn.Close()
-	readFromConnection(conn)
+
+	rpc := rpc.NewRpc(rpc.DefaultUDPReadWriter(256))
+	rpc.RegisterProcedure("sendConnections", sendConnections)
+	rpc.Start(conn)
 }
 
-func readWriter(conn net.UDPConn, respond func([]byte) []byte) {
-	buf := make([]byte, 256)
-	_, addr, err := conn.ReadFromUDP(buf)
-	if err != nil {
-		log.Fatal()
-	}
-	conn.WriteToUDP(respond(buf), addr)
-}
-
-func readFromConnection(conn *net.UDPConn) {
-	buf := make([]byte, 256)
-	for {
-		_, addr, err := conn.ReadFromUDP(buf)
-		if err != nil {
-			continue
-		}
-		fp := strings.Split(string(buf), " ")
-		switch fp[0] {
-		case "sendConnections":
-			conn.WriteToUDP([]byte("ok"), addr)
-		case "ok":
-			println("ok")
-		}
+func (p *Peer) SendTooAll(message string) {
+	for _, conn := range p.conns {
+		fmt.Fprintln(conn, message)
 	}
 }
 
