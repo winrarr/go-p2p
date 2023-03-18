@@ -13,17 +13,16 @@ type Peer struct {
 
 func CreateGenesisPeer(lPort int) Peer {
 	conn := newConnection(lPort)
-	go listen(conn)
-
-	return Peer{
+	p := Peer{
 		conn: conn,
 	}
+	go p.readFromConnection(conn)
+
+	return p
 }
 
 func CreatePeerAndConnect(lPort int, rIp string, rPort int) Peer {
 	conn := newConnection(lPort)
-	go listen(conn)
-
 	rAddr := &net.UDPAddr{
 		IP:   net.ParseIP(rIp),
 		Port: rPort,
@@ -32,9 +31,8 @@ func CreatePeerAndConnect(lPort int, rIp string, rPort int) Peer {
 		conn:       conn,
 		knownPeers: []*net.UDPAddr{rAddr},
 	}
-
+	go p.readFromConnection(conn)
 	p.AskForConnections(rAddr)
-
 	return p
 }
 
@@ -49,14 +47,21 @@ func newConnection(lPort int) *net.UDPConn {
 	return conn
 }
 
-func listen(conn *net.UDPConn) {
+func (p *Peer) readFromConnection(conn *net.UDPConn) {
 	rpc := rpc.NewRpc(rpc.DefaultUDPReadWriter(256))
-	rpc.RegisterProcedure("sendConnections", sendConnections)
+	rpc.RegisterProcedure("sendConnections", p.sendConnections)
+	rpc.RegisterProcedure("connections", p.connections)
 	rpc.Start(conn)
 }
 
 func (p *Peer) AskForConnections(addr *net.UDPAddr) {
 	p.sendTo("sendConnections ", addr)
+	buf := make([]byte, 2048)
+	_, _, err := p.conn.ReadFromUDP(buf)
+	if err != nil {
+		log.Fatal()
+	}
+	println(string(buf))
 }
 
 func (p *Peer) SendTooAll(message string) {
@@ -66,11 +71,9 @@ func (p *Peer) SendTooAll(message string) {
 }
 
 func (p *Peer) sendTo(message string, addr *net.UDPAddr) {
-	// println("sending \"" + message + "\" from " + p.conn.LocalAddr().String() + " to " + addr.String())
-	n, err := p.conn.WriteToUDP([]byte(message), addr)
-	println("sent ", n, " bytes")
+	_, err := p.conn.WriteToUDP([]byte(message), addr)
 	if err != nil {
-		// log.Fatal(err)
+		log.Fatal(err)
 	}
 }
 

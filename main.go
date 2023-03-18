@@ -3,25 +3,25 @@ package main
 import (
 	"log"
 	"net"
-	"time"
+	"p2p/peer"
 )
 
 func main() {
-	// port := 10000
-	// peers := []peer.Peer{peer.CreateGenesisPeer("localhost", port)}
-	// for i := 1; i < 2; i++ {
-	// 	peers = append(peers,
-	// 		peer.CreatePeerAndConnect(
-	// 			"localhost", port,
-	// 			"localhost", port+i,
-	// 		),
-	// 	)
-	// }
+	port := 10000
+	peers := []peer.Peer{peer.CreateGenesisPeer(port)}
+	for i := 1; i < 2; i++ {
+		peers = append(peers,
+			peer.CreatePeerAndConnect(
+				port+i,
+				"127.0.0.1", port,
+			),
+		)
+	}
 
-	go server()
-	time.Sleep(time.Second)
-	client()
-	time.Sleep(time.Second)
+	// go server()
+	// time.Sleep(time.Second)
+	// client()
+	// time.Sleep(time.Second)
 }
 
 func server() {
@@ -41,6 +41,7 @@ func server() {
 		if err != nil {
 			log.Fatal("could not read from udp")
 		}
+		println(string(buf))
 		conn.WriteToUDP([]byte("received message"), addr)
 	}
 }
@@ -57,7 +58,7 @@ func client() {
 
 	// send message "hello" to server
 	rAddr := &net.UDPAddr{
-		IP:   net.ParseIP("localhost"),
+		IP:   net.ParseIP("127.0.0.1"),
 		Port: 10000,
 	}
 	n, err := conn.WriteToUDP([]byte("hello"), rAddr)

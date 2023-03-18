@@ -1,15 +1,14 @@
 package rpc
 
 import (
-	"errors"
 	"log"
 	"net"
 	"strings"
 )
 
-type Responder[T net.Conn] func([]byte) ([]byte, error)
+type Responder[T net.Conn] func([]byte) []byte
 type readWriter[T net.Conn] func(T, Responder[T])
-type procedure[T net.Conn] func(...string) []string
+type procedure[T net.Conn] func(...string) string
 
 type rpc[T net.Conn] struct {
 	rw         readWriter[T]
@@ -31,14 +30,17 @@ func (r *rpc[T]) UnregisterProcedure(command string) {
 	delete(r.procedures, command)
 }
 
-func (r *rpc[T]) responder(request []byte) ([]byte, error) {
+func (r *rpc[T]) responder(request []byte) []byte {
 	fp := strings.Split(string(request), " ")
 	if _, ok := r.procedures[fp[0]]; !ok {
-		return nil, errors.New("no such procedure found")
+		return nil
 	}
 	procedure, payload := r.procedures[fp[0]], fp[1:]
 	response := procedure(payload...)
-	return []byte(strings.Join(response, " ")), nil
+	if response == "" {
+		return nil
+	}
+	return []byte(response)
 }
 
 func (r *rpc[T]) Start(conn T) {
@@ -50,14 +52,12 @@ func (r *rpc[T]) Start(conn T) {
 func DefaultUDPReadWriter(maxBytes int) readWriter[*net.UDPConn] {
 	return func(conn *net.UDPConn, respond Responder[*net.UDPConn]) {
 		buf := make([]byte, 256)
-		println("waiting for message at " + conn.LocalAddr().String())
 		_, addr, err := conn.ReadFromUDP(buf)
-		println("received message at " + conn.LocalAddr().String())
 		if err != nil {
-			log.Fatal()
+			log.Fatal("failed to read from udp")
 		}
-		response, err := respond(buf)
-		if err == nil {
+		response := respond(buf)
+		if response != nil {
 			conn.WriteToUDP(response, addr)
 		}
 	}
