@@ -50,7 +50,9 @@ func (r *rpc[T]) Start(conn T) {
 func DefaultUDPReadWriter(maxBytes int) readWriter[*net.UDPConn] {
 	return func(conn *net.UDPConn, respond Responder[*net.UDPConn]) {
 		buf := make([]byte, 256)
+		println("waiting for message at " + conn.LocalAddr().String())
 		_, addr, err := conn.ReadFromUDP(buf)
+		println("received message at " + conn.LocalAddr().String())
 		if err != nil {
 			log.Fatal()
 		}

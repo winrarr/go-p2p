@@ -1,58 +1,76 @@
 package peer
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"p2p/rpc"
-	"strconv"
 )
 
 type Peer struct {
-	conns []net.Conn
+	conn       *net.UDPConn
+	knownPeers []*net.UDPAddr
 }
 
-func CreateGenesisPeer(listenIp string, listenPort int) Peer {
-	go listen(listenIp, listenPort)
+func CreateGenesisPeer(lIp string, lPort int) Peer {
+	conn := newConnection(lIp, lPort)
+	go listen(conn)
 
 	return Peer{
-		conns: []net.Conn{},
+		conn: conn,
 	}
 }
 
-func CreatePeerAndConnect(ip string, port int, listenIp string, listenPort int) Peer {
-	conn, err := net.Dial("udp", ip+":"+strconv.Itoa(port))
-	if err != nil {
-		log.Fatal("cant connect")
+func CreatePeerAndConnect(rIp string, rPort int, lIp string, lPort int) Peer {
+	conn := newConnection(lIp, lPort)
+	go listen(conn)
+
+	rAddr := &net.UDPAddr{
+		IP:   net.ParseIP(rIp),
+		Port: rPort,
+	}
+	p := Peer{
+		conn:       conn,
+		knownPeers: []*net.UDPAddr{rAddr},
 	}
 
-	return Peer{
-		conns: []net.Conn{conn},
-	}
+	p.AskForConnections(rAddr)
+
+	return p
 }
 
-func listen(listenIp string, listenPort int) {
-	conn, err := newConnection(listenIp, listenPort)
-	if err != nil {
-		log.Fatal(err)
+func newConnection(lIp string, lPort int) *net.UDPConn {
+	lAddr := &net.UDPAddr{
+		IP:   net.ParseIP(lIp),
+		Port: lPort,
 	}
-	defer conn.Close()
+	conn, err := net.ListenUDP("udp", lAddr)
+	if err != nil {
+		log.Fatal()
+	}
+	return conn
+}
 
+func listen(conn *net.UDPConn) {
 	rpc := rpc.NewRpc(rpc.DefaultUDPReadWriter(256))
 	rpc.RegisterProcedure("sendConnections", sendConnections)
 	rpc.Start(conn)
 }
 
+func (p *Peer) AskForConnections(addr *net.UDPAddr) {
+	p.sendTo("sendConnections ", addr)
+}
+
 func (p *Peer) SendTooAll(message string) {
-	for _, conn := range p.conns {
-		fmt.Fprintln(conn, message)
+	for _, addr := range p.knownPeers {
+		p.sendTo(message, addr)
 	}
 }
 
-func newConnection(listenIp string, listenPort int) (*net.UDPConn, error) {
-	udpAddr := net.UDPAddr{
-		IP:   net.ParseIP(listenIp),
-		Port: listenPort,
-	}
-	return net.ListenUDP("udp", &udpAddr)
+func (p *Peer) sendTo(message string, addr *net.UDPAddr) {
+	println("sending \"" + message + "\" from " + p.conn.LocalAddr().String() + " to " + addr.String())
+	p.conn.WriteToUDP([]byte(message), addr)
+}
+
+func (p *Peer) Address() net.Addr {
+	return p.conn.LocalAddr()
 }
