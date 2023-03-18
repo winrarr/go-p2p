@@ -9,7 +9,7 @@ import (
 
 type Responder[T net.Conn] func([]byte) ([]byte, error)
 type readWriter[T net.Conn] func(T, Responder[T])
-type procedure[T net.Conn] func([]string) []string
+type procedure[T net.Conn] func(...string) []string
 
 type rpc[T net.Conn] struct {
 	rw         readWriter[T]
@@ -37,7 +37,7 @@ func (r *rpc[T]) responder(request []byte) ([]byte, error) {
 		return nil, errors.New("no such procedure found")
 	}
 	procedure, payload := r.procedures[fp[0]], fp[1:]
-	response := procedure(payload)
+	response := procedure(payload...)
 	return []byte(strings.Join(response, " ")), nil
 }
 
