@@ -66,8 +66,12 @@ func (p *Peer) SendTooAll(message string) {
 }
 
 func (p *Peer) sendTo(message string, addr *net.UDPAddr) {
-	println("sending \"" + message + "\" from " + p.conn.LocalAddr().String() + " to " + addr.String())
-	p.conn.WriteToUDP([]byte(message), addr)
+	// println("sending \"" + message + "\" from " + p.conn.LocalAddr().String() + " to " + addr.String())
+	n, err := p.conn.WriteToUDP([]byte(message), addr)
+	println("sent ", n, " bytes")
+	if err != nil {
+		// log.Fatal(err)
+	}
 }
 
 func (p *Peer) Address() net.Addr {
