@@ -1,65 +1,114 @@
 package rpc
 
 import (
+	"encoding/json"
 	"log"
 	"net"
-	"strings"
 )
 
-type Responder[T net.Conn] func([]byte) []byte
-type readWriter[T net.Conn] func(T, Responder[T])
-type procedure[T net.Conn] func(...string) string
+type procedure func(*Request)
+type reader func() *Request
+type writer func([]byte, *net.UDPAddr)
 
-type rpc[T net.Conn] struct {
-	rw         readWriter[T]
-	procedures map[string]procedure[T]
+type Rpc struct {
+	conn       *net.UDPConn
+	procedures map[string]procedure
+	read       reader
+	write      writer
 }
 
-func NewRpc[T net.Conn](rw readWriter[T]) rpc[T] {
-	return rpc[T]{
-		rw:         rw,
-		procedures: map[string]procedure[T]{},
+type Request struct {
+	rpc       *Rpc
+	addr      *net.UDPAddr
+	procedure string
+	Payload   []byte
+}
+
+type requestData struct {
+	Procedure string
+	Payload   []byte
+}
+
+func NewRpc(conn *net.UDPConn) *Rpc {
+	rpc := Rpc{
+		conn:       conn,
+		procedures: map[string]procedure{},
 	}
-}
 
-func (r *rpc[T]) RegisterProcedure(command string, p procedure[T]) {
-	r.procedures[command] = p
-}
-
-func (r *rpc[T]) UnregisterProcedure(command string) {
-	delete(r.procedures, command)
-}
-
-func (r *rpc[T]) responder(request []byte) []byte {
-	fp := strings.Split(string(request), " ")
-	println(fp[0])
-	if _, ok := r.procedures[fp[0]]; !ok {
-		return nil
-	}
-	procedure, payload := r.procedures[fp[0]], fp[1:]
-	response := procedure(payload...)
-	if response == "" {
-		return nil
-	}
-	return []byte(response)
-}
-
-func (r *rpc[T]) Start(conn T) {
-	for {
-		r.rw(conn, r.responder)
-	}
-}
-
-func DefaultUDPReadWriter(maxBytes int) readWriter[*net.UDPConn] {
-	buf := make([]byte, 256)
-	return func(conn *net.UDPConn, respond Responder[*net.UDPConn]) {
+	buf := make([]byte, 1024)
+	reader := func() *Request {
 		_, addr, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			log.Fatal("failed to read from udp")
 		}
-		response := respond(buf)
-		if response != nil {
-			conn.WriteToUDP(response, addr)
+		var data requestData
+		err = json.Unmarshal(buf, &data)
+		if err != nil {
+			log.Fatal("error unmarshalling data")
 		}
+
+		return &Request{
+			rpc:       &rpc,
+			addr:      addr,
+			procedure: data.Procedure,
+			Payload:   data.Payload,
+		}
+	}
+
+	writer := func(bytes []byte, addr *net.UDPAddr) {
+		_, err := conn.WriteToUDP(bytes, addr)
+		if err != nil {
+			log.Fatal("failed to write to udp")
+		}
+	}
+
+	rpc.read = reader
+	rpc.write = writer
+
+	return &rpc
+}
+
+func (r *Request) Respond(procedure string, payload any) {
+	bytes, err := json.Marshal(payload)
+	if err != nil {
+		log.Fatal("error marshalling data")
+	}
+	r.rpc.write(bytes, r.addr)
+}
+
+func (r *Rpc) RegisterProcedure(command string, p procedure) {
+	r.procedures[command] = p
+}
+
+func (r *Rpc) UnregisterProcedure(command string) {
+	delete(r.procedures, command)
+}
+
+func (r *Rpc) Listen() {
+	for {
+		req := r.read()
+		procedure, ok := r.procedures[req.procedure]
+		if ok {
+			procedure(req)
+		}
+	}
+}
+
+func (r *Rpc) SendTo(procedure string, payload any, addr *net.UDPAddr) {
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		log.Fatal("error marshalling the payload")
+	}
+	data := requestData{
+		Procedure: procedure,
+		Payload:   payloadBytes,
+	}
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		log.Fatal("error marshalling the payload")
+	}
+	_, err = r.conn.WriteToUDP(bytes, addr)
+	if err != nil {
+		log.Fatal("error writing to udp")
 	}
 }

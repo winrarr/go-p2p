@@ -1,43 +1,38 @@
 package peer
 
 import (
+	"encoding/json"
 	"log"
 	"net"
-	"strings"
+	"p2p/rpc"
 )
 
-func (p *Peer) SendSendConnections(addr *net.UDPAddr) {
-	p.sendTo("sendConnections", addr)
-}
-
-func (p *Peer) getSendConnections(payload ...string) string {
-	var str strings.Builder
-	str.WriteString("connections ")
-	for _, addr := range p.knownPeers {
-		str.WriteString(addr.String() + " ")
-	}
-	return str.String()
-}
-
 func (p *Peer) SendHello(addr *net.UDPAddr) {
-	p.sendTo("hello", addr)
+	p.rpc.SendTo("hello", p.conn.LocalAddr(), addr)
 }
 
-func (p *Peer) getHello(payload ...string) string {
-	addr, err := net.ResolveUDPAddr("udp", payload[0])
+func (p *Peer) getHello(r *rpc.Request) {
+	var addr *net.UDPAddr
+	err := json.Unmarshal(r.Payload, addr)
 	if err != nil {
-		p.knownPeers = append(p.knownPeers, addr)
+		log.Fatal("error unmarshalling address in getHello")
 	}
-	return ""
+	p.knownPeers = append(p.knownPeers, addr)
 }
 
-func (p *Peer) getConnections(payload ...string) string {
-	for _, addr := range payload {
-		UDPAddr, err := net.ResolveUDPAddr("udp", addr)
-		if err != nil {
-			log.Fatal("could not resolve address")
-		}
-		p.knownPeers = append(p.knownPeers, UDPAddr)
+func (p *Peer) SendSendConnections(addr *net.UDPAddr) {
+	p.rpc.SendTo("sendConnections", nil, addr)
+}
+
+func (p *Peer) getSendConnections(r *rpc.Request) {
+	r.Respond("connections", p.knownPeers)
+}
+
+func (p *Peer) getConnections(r *rpc.Request) {
+	var connections []*net.UDPAddr
+	err := json.Unmarshal(r.Payload, &connections)
+	if err != nil {
+		log.Fatal("error unmarshalling connections in getConnections")
 	}
-	return ""
+	p.knownPeers = append(p.knownPeers, connections...)
 }

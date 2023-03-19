@@ -7,6 +7,7 @@ import (
 )
 
 type Peer struct {
+	rpc        *rpc.Rpc
 	conn       *net.UDPConn
 	knownPeers []*net.UDPAddr
 }
@@ -32,6 +33,7 @@ func CreatePeerAndConnect(lPort int, rIp string, rPort int) Peer {
 		knownPeers: []*net.UDPAddr{rAddr},
 	}
 	go p.readFromConnection(conn)
+	p.SendHello(rAddr)
 	p.SendSendConnections(rAddr)
 	return p
 }
@@ -48,23 +50,16 @@ func newConnection(lPort int) *net.UDPConn {
 }
 
 func (p *Peer) readFromConnection(conn *net.UDPConn) {
-	rpc := rpc.NewRpc(rpc.DefaultUDPReadWriter(256))
+	rpc := rpc.NewRpc(conn)
 	rpc.RegisterProcedure("sendConnections", p.getSendConnections)
 	rpc.RegisterProcedure("connections", p.getConnections)
 	rpc.RegisterProcedure("hello", p.getHello)
-	rpc.Start(conn)
+	rpc.Listen()
 }
 
-func (p *Peer) SendTooAll(message string) {
+func (p *Peer) SendTooAll(procedure string, payload any) {
 	for _, addr := range p.knownPeers {
-		p.sendTo(message, addr)
-	}
-}
-
-func (p *Peer) sendTo(message string, addr *net.UDPAddr) {
-	_, err := p.conn.WriteToUDP([]byte(message), addr)
-	if err != nil {
-		log.Fatal(err)
+		p.rpc.SendTo(procedure, payload, addr)
 	}
 }
 
