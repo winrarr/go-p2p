@@ -32,6 +32,7 @@ func (r *rpc[T]) UnregisterProcedure(command string) {
 
 func (r *rpc[T]) responder(request []byte) []byte {
 	fp := strings.Split(string(request), " ")
+	println(fp[0])
 	if _, ok := r.procedures[fp[0]]; !ok {
 		return nil
 	}
@@ -50,8 +51,8 @@ func (r *rpc[T]) Start(conn T) {
 }
 
 func DefaultUDPReadWriter(maxBytes int) readWriter[*net.UDPConn] {
+	buf := make([]byte, 256)
 	return func(conn *net.UDPConn, respond Responder[*net.UDPConn]) {
-		buf := make([]byte, 256)
 		_, addr, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			log.Fatal("failed to read from udp")
