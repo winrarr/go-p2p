@@ -8,16 +8,11 @@ import (
 )
 
 func (p *Peer) SendHello(addr *net.UDPAddr) {
-	p.rpc.SendTo("hello", p.conn.LocalAddr(), addr)
+	p.rpc.SendTo("hello", p.conn.LocalAddr().String(), addr)
 }
 
 func (p *Peer) getHello(r *rpc.Request) {
-	var addr *net.UDPAddr
-	err := json.Unmarshal(r.Payload, addr)
-	if err != nil {
-		log.Fatal("error unmarshalling address in getHello")
-	}
-	p.knownPeers = append(p.knownPeers, addr)
+	p.knownPeers = append(p.knownPeers, r.Addr)
 }
 
 func (p *Peer) SendSendConnections(addr *net.UDPAddr) {
@@ -29,10 +24,12 @@ func (p *Peer) getSendConnections(r *rpc.Request) {
 }
 
 func (p *Peer) getConnections(r *rpc.Request) {
-	var connections []*net.UDPAddr
-	err := json.Unmarshal(r.Payload, &connections)
+	println(string(r.Payload))
+	var addresses []*net.UDPAddr
+	err := json.Unmarshal(r.Payload, &addresses)
 	if err != nil {
-		log.Fatal("error unmarshalling connections in getConnections")
+		log.Fatal("error unmarshalling address in getConnections")
 	}
-	p.knownPeers = append(p.knownPeers, connections...)
+	p.knownPeers = append(p.knownPeers, addresses...)
+	p.printKnownPeers()
 }

@@ -19,14 +19,14 @@ type Rpc struct {
 
 type Request struct {
 	rpc       *Rpc
-	addr      *net.UDPAddr
+	Addr      *net.UDPAddr
 	procedure string
 	Payload   []byte
 }
 
 type requestData struct {
-	Procedure string
-	Payload   []byte
+	Procedure    string
+	PayloadBytes []byte
 }
 
 func NewRpc(conn *net.UDPConn) *Rpc {
@@ -37,21 +37,22 @@ func NewRpc(conn *net.UDPConn) *Rpc {
 
 	buf := make([]byte, 1024)
 	reader := func() *Request {
-		_, addr, err := conn.ReadFromUDP(buf)
+		n, addr, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			log.Fatal("failed to read from udp")
 		}
+		// println("received:", string(buf))
 		var data requestData
-		err = json.Unmarshal(buf, &data)
+		err = json.Unmarshal(buf[:n], &data)
 		if err != nil {
 			log.Fatal("error unmarshalling data")
 		}
 
 		return &Request{
 			rpc:       &rpc,
-			addr:      addr,
+			Addr:      addr,
 			procedure: data.Procedure,
-			Payload:   data.Payload,
+			Payload:   data.PayloadBytes,
 		}
 	}
 
@@ -60,6 +61,7 @@ func NewRpc(conn *net.UDPConn) *Rpc {
 		if err != nil {
 			log.Fatal("failed to write to udp")
 		}
+		// println("sent:", string(bytes))
 	}
 
 	rpc.read = reader
@@ -69,11 +71,7 @@ func NewRpc(conn *net.UDPConn) *Rpc {
 }
 
 func (r *Request) Respond(procedure string, payload any) {
-	bytes, err := json.Marshal(payload)
-	if err != nil {
-		log.Fatal("error marshalling data")
-	}
-	r.rpc.write(bytes, r.addr)
+	r.rpc.SendTo(procedure, payload, r.Addr)
 }
 
 func (r *Rpc) RegisterProcedure(command string, p procedure) {
@@ -87,6 +85,7 @@ func (r *Rpc) UnregisterProcedure(command string) {
 func (r *Rpc) Listen() {
 	for {
 		req := r.read()
+		// println(r.conn.LocalAddr().String(), "received procedure", req.procedure)
 		procedure, ok := r.procedures[req.procedure]
 		if ok {
 			procedure(req)
@@ -100,15 +99,13 @@ func (r *Rpc) SendTo(procedure string, payload any, addr *net.UDPAddr) {
 		log.Fatal("error marshalling the payload")
 	}
 	data := requestData{
-		Procedure: procedure,
-		Payload:   payloadBytes,
+		Procedure:    procedure,
+		PayloadBytes: payloadBytes,
 	}
 	bytes, err := json.Marshal(data)
 	if err != nil {
-		log.Fatal("error marshalling the payload")
+		log.Fatal("error marshalling the request")
 	}
-	_, err = r.conn.WriteToUDP(bytes, addr)
-	if err != nil {
-		log.Fatal("error writing to udp")
-	}
+	r.write(bytes, addr)
+	// println(r.conn.LocalAddr().String(), "sent procedure", data.Procedure, "to", addr.String())
 }
