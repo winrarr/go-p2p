@@ -1,58 +1,85 @@
 package peer
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"p2p/rpc"
-	"strconv"
 )
 
 type Peer struct {
-	conns []net.Conn
+	Name       string
+	rpc        *rpc.Rpc
+	conn       *net.UDPConn
+	knownPeers []*net.UDPAddr
 }
 
-func CreateGenesisPeer(listenIp string, listenPort int) Peer {
-	go listen(listenIp, listenPort)
-
-	return Peer{
-		conns: []net.Conn{},
+func CreateGenesisPeer(name string, lPort int) Peer {
+	conn, lAddr := newConnection(lPort)
+	p := Peer{
+		Name:       name,
+		conn:       conn,
+		knownPeers: []*net.UDPAddr{lAddr},
 	}
+	conn.LocalAddr()
+	go p.readFromConnection(conn)
+
+	return p
 }
 
-func CreatePeerAndConnect(ip string, port int, listenIp string, listenPort int) Peer {
-	conn, err := net.Dial("udp", ip+":"+strconv.Itoa(port))
+func CreatePeerAndConnect(name string, lPort int, rIp string, rPort int) Peer {
+	conn, lAddr := newConnection(lPort)
+	rAddr := &net.UDPAddr{
+		IP:   net.ParseIP(rIp),
+		Port: rPort,
+	}
+	p := Peer{
+		Name:       name,
+		conn:       conn,
+		knownPeers: []*net.UDPAddr{lAddr, rAddr},
+	}
+	p.readFromConnection(conn)
+	p.SendHello(rAddr)
+	p.SendSendConnections(rAddr)
+	return p
+}
+
+func newConnection(lPort int) (*net.UDPConn, *net.UDPAddr) {
+	lAddr := &net.UDPAddr{
+		Port: lPort,
+	}
+	conn, err := net.ListenUDP("udp", lAddr)
 	if err != nil {
-		log.Fatal("cant connect")
+		log.Fatal()
 	}
+	return conn, lAddr
+}
 
-	return Peer{
-		conns: []net.Conn{conn},
+func (p *Peer) readFromConnection(conn *net.UDPConn) {
+	p.rpc = rpc.NewRpc(conn)
+	p.rpc.RegisterProcedure("sendConnections", p.getSendConnections)
+	p.rpc.RegisterProcedure("connections", p.getConnections)
+	p.rpc.RegisterProcedure("hello", p.getHello)
+	go p.rpc.Listen()
+}
+
+func (p *Peer) SendTooAll(procedure string, payload any) {
+	for _, addr := range p.knownPeers {
+		p.rpc.SendTo(procedure, payload, addr)
 	}
 }
 
-func listen(listenIp string, listenPort int) {
-	conn, err := newConnection(listenIp, listenPort)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer conn.Close()
-
-	rpc := rpc.NewRpc(rpc.DefaultUDPReadWriter(256))
-	rpc.RegisterProcedure("sendConnections", sendConnections)
-	rpc.Start(conn)
+func (p *Peer) Address() net.Addr {
+	return p.conn.LocalAddr()
 }
 
-func (p *Peer) SendTooAll(message string) {
-	for _, conn := range p.conns {
-		fmt.Fprintln(conn, message)
-	}
+func (p *Peer) KnownPeers() []*net.UDPAddr {
+	return p.knownPeers
 }
 
-func newConnection(listenIp string, listenPort int) (*net.UDPConn, error) {
-	udpAddr := net.UDPAddr{
-		IP:   net.ParseIP(listenIp),
-		Port: listenPort,
+func (p *Peer) printKnownPeers() {
+	print(p.Name, " known peers: ")
+	for _, addr := range p.KnownPeers() {
+		print(addr.String(), " ")
 	}
-	return net.ListenUDP("udp", &udpAddr)
+	println()
 }
