@@ -29,19 +29,18 @@ type requestData struct {
 	PayloadBytes []byte
 }
 
-func NewRpc(conn *net.UDPConn) *Rpc {
+func NewRpc(conn *net.UDPConn, maxBytes int) *Rpc {
 	rpc := Rpc{
 		conn:       conn,
 		procedures: map[string]procedure{},
 	}
 
-	buf := make([]byte, 1024)
+	buf := make([]byte, maxBytes)
 	reader := func() *Request {
 		n, addr, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			log.Fatal("failed to read from udp")
 		}
-		// println("received:", string(buf))
 		var data requestData
 		err = json.Unmarshal(buf[:n], &data)
 		if err != nil {
@@ -61,7 +60,6 @@ func NewRpc(conn *net.UDPConn) *Rpc {
 		if err != nil {
 			log.Fatal("failed to write to udp")
 		}
-		// println("sent:", string(bytes))
 	}
 
 	rpc.read = reader
@@ -85,7 +83,6 @@ func (r *Rpc) UnregisterProcedure(command string) {
 func (r *Rpc) Listen() {
 	for {
 		req := r.read()
-		// println(r.conn.LocalAddr().String(), "received procedure", req.procedure)
 		procedure, ok := r.procedures[req.procedure]
 		if ok {
 			procedure(req)
@@ -107,5 +104,4 @@ func (r *Rpc) SendTo(procedure string, payload any, addr *net.UDPAddr) {
 		log.Fatal("error marshalling the request")
 	}
 	r.write(bytes, addr)
-	// println(r.conn.LocalAddr().String(), "sent procedure", data.Procedure, "to", addr.String())
 }

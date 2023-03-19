@@ -55,7 +55,7 @@ func newConnection(lPort int) (*net.UDPConn, *net.UDPAddr) {
 }
 
 func (p *Peer) readFromConnection(conn *net.UDPConn) {
-	p.rpc = rpc.NewRpc(conn)
+	p.rpc = rpc.NewRpc(conn, 1024)
 	p.rpc.RegisterProcedure("sendConnections", p.getSendConnections)
 	p.rpc.RegisterProcedure("connections", p.getConnections)
 	p.rpc.RegisterProcedure("hello", p.getHello)

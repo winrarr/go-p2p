@@ -24,12 +24,10 @@ func (p *Peer) getSendConnections(r *rpc.Request) {
 }
 
 func (p *Peer) getConnections(r *rpc.Request) {
-	println(string(r.Payload))
 	var addresses []*net.UDPAddr
 	err := json.Unmarshal(r.Payload, &addresses)
 	if err != nil {
 		log.Fatal("error unmarshalling address in getConnections")
 	}
 	p.knownPeers = append(p.knownPeers, addresses...)
-	p.printKnownPeers()
 }
